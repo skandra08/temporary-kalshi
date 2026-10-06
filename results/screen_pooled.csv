@@ -1,0 +1,26 @@
+rule,category,n,series,pnl_cents,lo,hi,avg_spread_c
+buy_no_all,Climate and Weather,24698,59,-4.32,-4.69,-3.95,5.74
+buy_no_all,Commodities,2352,9,-5.98,-10.65,-1.06,8.0
+buy_no_all,Crypto,438,6,-4.17,-8.42,-2.05,15.61
+buy_no_all,Economics,5215,19,-5.39,-6.89,-3.94,10.08
+buy_no_all,Entertainment,877,2,-24.98,-36.83,-14.4,35.53
+buy_no_all,Financials,2134,8,-12.9,-16.32,-9.54,12.24
+buy_no_all,ALL,35714,103,-5.61,-6.12,-5.06,7.76
+buy_yes_all,Climate and Weather,24698,59,-2.44,-2.85,-2.04,5.74
+buy_yes_all,Commodities,2352,9,-4.15,-9.21,3.16,8.0
+buy_yes_all,Crypto,438,6,-11.97,-18.91,-8.3,15.61
+buy_yes_all,Economics,5215,19,-5.42,-6.76,-4.18,10.08
+buy_yes_all,Entertainment,877,2,-11.48,-17.8,-5.5,35.53
+buy_yes_all,Financials,2134,8,-0.98,-4.7,2.43,12.24
+buy_yes_all,ALL,35714,103,-3.24,-3.77,-2.66,7.76
+longshot_no_lt10,Climate and Weather,11893,59,-1.19,-1.48,-0.91,1.9
+longshot_no_lt10,Commodities,310,9,-18.65,-27.63,-10.56,3.59
+longshot_no_lt10,Crypto,230,6,-0.62,-1.6,0.09,2.75
+longshot_no_lt10,Economics,2162,19,-0.55,-1.42,0.14,2.75
+longshot_no_lt10,Entertainment,239,2,0.19,-0.71,0.68,3.05
+longshot_no_lt10,Financials,629,8,-6.37,-9.02,-4.16,4.01
+longshot_no_lt10,ALL,15463,103,-1.63,-2.04,-1.28,2.17
+favorite_yes_gt90,Climate and Weather,4344,58,-0.07,-0.43,0.24,2.24
+favorite_yes_gt90,Commodities,231,9,-22.57,-35.17,-12.8,3.29
+favorite_yes_gt90,Economics,1705,19,0.12,-0.65,0.64,2.9
+favorite_yes_gt90,ALL,6583,98,-0.93,-1.48,-0.41,2.5

@@ -93,15 +93,46 @@ fills at the quoted ask are assumed, and depth at the quote is not observed in h
 quotes older than 3h are dropped. Reproduce with `python scripts/rain_report.py`
 (raw numbers in `results/rain_results.json`).
 
-### 3. `mmsim`: market making under adverse selection
+### 3. Breadth screen: do simple rules work across *all* recurring Kalshi markets?
+`screen.py` takes 103 daily/weekly/hourly series (weather, economics, commodities, financials,
+crypto, entertainment; ~35,700 quotes, ~4,300 events, last ~60 days), buys one contract at the
+ask under four simple rules at three points in each market's life (50/80/95% elapsed), and
+tests every (series x entry x rule) with each series' own fee multiplier.
+
+**Result: nothing survives.** 736 tests over 88 series; with event-clustered inference,
+Benjamini-Hochberg FDR control at 5%, and replication in a held-out half of each series' history,
+**0 discoveries**. Pooled by rule (cents per contract, 95% CI clustered by close date):
+
+| Rule | All series | Weather | Economics | Financials |
+|---|---|---|---|---|
+| Buy NO on everything | **-5.6** [-6.1, -5.1] | -4.3 | -5.4 | -12.9 |
+| Buy YES on everything | -3.2 [-3.8, -2.7] | -2.4 | -5.4 | -1.0 (n.s.) |
+| Buy YES when priced > 90c | -0.9 [-1.5, -0.4] | -0.1 (n.s.) | +0.1 (n.s.) | n/a |
+| Buy NO when YES priced < 10c | -1.6 [-2.0, -1.3] | -1.2 | -0.6 (n.s.) | -6.4 |
+
+- **Taking liquidity at the ask loses roughly the spread plus the fee.** The average quoted spread
+  is 7.8c (5.7c in weather); cheap contracts have ~2c spreads, and fees add up to 1.75c at 50c.
+- **The rain result does not generalise.** Longshot-NO earned +2c on rain (above) but loses 1.2c
+  pooled over 59 weather series, so it is a property of that market, not of Kalshi.
+- **Two statistical traps I hit and fixed (both in the commit history):** (1) with only a few
+  independent events per series, a cluster bootstrap is degenerate and produced 105 spurious
+  "discoveries"; the screen now requires >= 25 events and clusters by event. (2) For
+  "favorite at 98c" rules every sampled contract wins, the bootstrap reports zero variance and
+  certainty; an exact binomial test at the event level replaced it (45 straight wins at 98c is
+  not evidence: 0.98^45 = 40%).
+- **What this cannot rule out:** edges of 1-2c at high prices (too few events per series to
+  detect), anything on the *maker* side (this tests taking only), and behaviour outside the last
+  ~60 days. Raw results: `results/screen_results.csv`, `results/screen_pooled.csv`.
+
+### 4. `mmsim`: market making under adverse selection
 Hawkes-process order flow with price impact, Avellaneda-Stoikov quoting, and an intensity-aware
 extension, evaluated on common random numbers. Validated against analytic fill rates.
 
-### 4. `quantlab`: bias-aware backtesting toolkit
+### 5. `quantlab`: bias-aware backtesting toolkit
 Look-ahead-safe engine, walk-forward validation, Probabilistic/Deflated Sharpe.
 
 ## Status
-The rain study and the BTC-digitals historical study are complete (above). The options-surface forward test is accumulating data. Next: a breadth screen of ~690 recurring Kalshi series and a forecast-based model for daily-high-temperature ladders.
+The rain study and the BTC-digitals historical study are complete (above). The options-surface forward test is accumulating data. The breadth screen is complete (null). Next: the forecast-based model for daily-high-temperature ladders, a maker-side (quote-providing) test, and the options-surface forward test (needs a local collector).
 Forward data accumulates in `data_live/`.
 
 ## Run it

@@ -190,6 +190,21 @@ def boot_mean(x, clusters, n_boot=1500, seed=0):
     return float(s.sum() / c.sum()), float(np.quantile(b, .025)), float(np.quantile(b, .975)), float((b <= 0).mean())
 
 
+def exact_binom_p(pnl, cost_plus_fee, clusters):
+    """One-sided exact binomial p-value for H0: win probability <= break-even (price + fee).
+
+    Works when the sample has zero variance (all wins), where a bootstrap would wrongly report
+    certainty. Contracts in one event are dependent, so the effective sample size is the number
+    of independent events: each event contributes its win fraction."""
+    from scipy.stats import binom
+    win = (np.asarray(pnl) + np.asarray(cost_plus_fee)) > 0.5          # payoff 1 happened
+    ev = pd.Series(win.astype(float)).groupby(np.asarray(clusters)).mean()
+    n = len(ev)
+    wins = int(round(ev.sum()))
+    be = float(np.clip(np.mean(cost_plus_fee), 1e-6, 1 - 1e-6))
+    return float(binom.sf(wins - 1, n, be))
+
+
 def bh_fdr(p, alpha=0.05):
     """Benjamini-Hochberg: boolean mask of discoveries at FDR level alpha."""
     p = np.asarray(p, float)
@@ -202,12 +217,14 @@ def bh_fdr(p, alpha=0.05):
     return mask
 
 
-def evaluate(q, fee_mult_by_series=None, min_n=40, n_boot=1500):
+def evaluate(q, fee_mult_by_series=None, min_n=40, n_boot=1500, min_events=25, min_events_half=10):
     """Test every (series, entry fraction, rule); replicate on the later half of each series' history."""
     rows = []
     fm = fee_mult_by_series or {}
     for (series, frac), g in q.groupby(["series", "frac"]):
-        g = g.assign(day=pd.to_datetime(g["close_time"], utc=True).dt.floor("D"))
+        # strikes of one event share one outcome path, so the independent unit is the event
+        key = g["event_ticker"] if "event_ticker" in g else pd.to_datetime(g["close_time"], utc=True).dt.floor("D")
+        g = g.assign(day=key.to_numpy())
         mid = ((g["yes_bid"] + g["yes_ask"]) / 2).to_numpy()
         cut = g["close_time"].median()
         early = (g["close_time"] <= cut).to_numpy()
@@ -216,12 +233,19 @@ def evaluate(q, fee_mult_by_series=None, min_n=40, n_boot=1500):
             if s.sum() < min_n:
                 continue
             gg, e = g[s], early[s]
+            if gg["day"].nunique() < min_events:      # too few independent events: bootstrap is meaningless
+                continue
             pnl = pnl_rule(gg, side, fm.get(series, 1.0))
-            m, lo, hi, p = boot_mean(pnl, gg["day"], n_boot)
+            m, lo, hi, p_boot = boot_mean(pnl, gg["day"], n_boot)
+            ask = (gg["yes_ask"] if side == "yes" else 1 - gg["yes_bid"]).to_numpy()
+            from .digital import fee_per_contract_amortised
+            cpf = ask + fm.get(series, 1.0) * fee_per_contract_amortised(ask)
+            p = max(p_boot, exact_binom_p(pnl, cpf, gg["day"]))     # the more conservative of the two
             row = dict(series=series, frac=frac, rule=name, n=len(gg), days=gg["day"].nunique(), pnl=m, lo=lo, hi=hi, p=p,
-                       cost=float(np.mean(gg["yes_ask"] if side == "yes" else 1 - gg["yes_bid"])))
-            if e.sum() >= 20 and (~e).sum() >= 20:
+                       p_boot=p_boot, cost=float(np.mean(ask)))
+            if gg["day"][e].nunique() >= min_events_half and gg["day"][~e].nunique() >= min_events_half:
                 tm, tl, th, tp = boot_mean(pnl[~e], gg["day"][~e], n_boot)
+                tp = max(tp, exact_binom_p(pnl[~e], cpf[~e], gg["day"][~e]))
                 trm, trl, trh, trp = boot_mean(pnl[e], gg["day"][e], n_boot)
                 row.update(train_pnl=trm, train_p=trp, test_pnl=tm, test_lo=tl, test_hi=th, test_p=tp)
             rows.append(row)
@@ -229,5 +253,79 @@ def evaluate(q, fee_mult_by_series=None, min_n=40, n_boot=1500):
     if t.empty:
         return t
     t["fdr_sig"] = bh_fdr(t["p"].to_numpy())
-    t["replicates"] = t["fdr_sig"] & (t.get("test_lo", np.nan) > 0)
+    t["replicates"] = t["fdr_sig"] & (t.get("test_p", 1.0) < 0.05)
     return t
+
+
+def sample_events(markets, n_events=60, per_event=3, min_volume=20, min_events=40):
+    """Event-based sample: for each series, n_events events spread evenly over its history, and the
+    `per_event` highest-volume liquid markets in each. Gives the many independent events per series
+    that cluster-robust inference needs (sampling the most recent markets yields only a few days)."""
+    m = markets.copy()
+    for c in ("open_time", "close_time"):
+        m[c] = pd.to_datetime(m[c], utc=True, format="ISO8601")
+    m = m[(m["volume"] >= min_volume) & m["open_time"].notna()]
+    m["life_h"] = (m["close_time"] - m["open_time"]).dt.total_seconds() / 3600
+    m = m[(m["life_h"] > 0.2) & (m["life_h"] < 24 * 14)]
+    out = []
+    for series, g in m.groupby("series"):
+        ev = g.groupby("event_ticker")["close_time"].max().sort_values()
+        if len(ev) < min_events:
+            continue
+        pick = ev.index[np.unique(np.linspace(0, len(ev) - 1, min(n_events, len(ev))).round().astype(int))]
+        gg = g[g["event_ticker"].isin(pick)].sort_values("volume", ascending=False)
+        out.append(gg.groupby("event_ticker").head(per_event))
+    return pd.concat(out, ignore_index=True)
+
+
+def _parse_batch(markets_json):
+    rows = []
+    for m in markets_json.get("markets", []):
+        t = m.get("market_ticker") or m.get("ticker")
+        for c in m.get("candlesticks", []):
+            try:
+                rows.append((t, c["end_period_ts"], _px(c.get("yes_bid")), _px(c.get("yes_ask")),
+                             _num(c.get("volume_fp", c.get("volume")))))
+            except (KeyError, TypeError, ValueError):
+                continue
+    return rows
+
+
+def fetch_candles_batch(sample, out_csv, batch=40, workers=2, fallback=True):
+    """Same output as fetch_candles but via GET /markets/candlesticks (many markets per call).
+    Tickers the batch endpoint returns nothing for fall back to the per-market (live/historical) path."""
+    import os
+    done = set(pd.read_csv(out_csv, usecols=["ticker"])["ticker"]) if os.path.exists(out_csv) else set()
+    todo = sample[~sample["ticker"].isin(done)].copy()
+    todo["period"] = np.where(todo["life_h"] <= 6, 1, 60)
+    jobs = []
+    for period, g in todo.groupby("period"):
+        g = g.sort_values("close_time")
+        for i in range(0, len(g), batch):
+            part = g.iloc[i:i + batch]
+            jobs.append((period, list(part["ticker"]), part["open_time"].min(), part["close_time"].max()))
+
+    def run(job):
+        period, tickers, start, end = job
+        try:
+            d = get_json(f"{BASE}/markets/candlesticks", {"market_tickers": ",".join(tickers),
+                         "start_ts": int(start.timestamp()), "end_ts": int(end.timestamp()), "period_interval": int(period)})
+            return tickers, _parse_batch(d)
+        except Exception:
+            return tickers, []
+
+    n = 0
+    with ThreadPoolExecutor(workers) as ex:
+        for tickers, rows in ex.map(run, jobs):
+            got = {r[0] for r in rows}
+            missing = [t for t in tickers if t not in got]
+            if fallback and missing:                 # per-market path (historical first for old markets)
+                sub = todo[todo["ticker"].isin(missing)]
+                for r in sub.itertuples():
+                    rows += _candle_job((r.ticker, r.series, r.open_time, r.close_time, int(r.period)))
+                got = {r[0] for r in rows}
+            rows += [(t, 0, np.nan, np.nan, np.nan) for t in tickers if t not in got]
+            pd.DataFrame(rows, columns=["ticker", "ts", "yes_bid", "yes_ask", "volume"]).to_csv(
+                out_csv, mode="a", header=not os.path.exists(out_csv), index=False)
+            n += len(tickers)
+            print(f"{n}/{len(todo)}", flush=True)

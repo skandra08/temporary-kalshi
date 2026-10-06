@@ -9,6 +9,10 @@ import time
 import requests
 
 CACHE_DIR = pathlib.Path(os.environ.get("DIGITALEDGE_CACHE", "data/cache"))
+class NotRetryable(Exception):
+    """4xx other than 429: fail immediately instead of backing off."""
+
+
 _session = requests.Session()
 _lock = threading.Lock()
 _last = [0.0]
@@ -35,12 +39,16 @@ def get_json(url, params=None, cache=True, retries=12, timeout=30):
             if r.status_code == 429 or r.status_code >= 500:
                 time.sleep(float(r.headers.get("Retry-After", 0)))
                 raise requests.HTTPError(f"{r.status_code}")
+            if 400 <= r.status_code < 500:            # client errors (404 etc.) will not fix themselves
+                raise NotRetryable(f"{r.status_code} {url}")
             r.raise_for_status()
             data = r.json()
             if cache:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(json.dumps(data))
             return data
+        except NotRetryable:
+            raise
         except (requests.RequestException, ValueError):
             if attempt == retries - 1:
                 raise
