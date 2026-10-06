@@ -234,3 +234,64 @@ def add_filing_features(p, progress=None):
                         ev_open=r.ev_open, settle_time=r.settle_time, filing_date=inf[0], form=inf[1],
                         doc_len=len(txt), count=c))
     return pd.DataFrame(out)
+
+
+# ------------------------------------------------------------------ earnings experiment (text features vs base rates)
+def earnings_features(d, a=5.0):
+    """Causal features per row: shrunk word prior from earlier settled calls, plus SEC-filing word count."""
+    d = d.sort_values("ev_open").reset_index(drop=True)
+    by_settle = d.drop_duplicates("event_ticker").sort_values("settle_time")
+    ev_open = d.groupby("event_ticker")["ev_open"].first()
+    order = list(by_settle["event_ticker"])
+    w_n, w_hit, tot_n, tot_hit, ptr = {}, {}, 0, 0.0, 0
+    co_n, co_hit = {}, {}
+    rows = []
+    for e, g in d.groupby("event_ticker", sort=False):
+        t0 = ev_open[e]
+        while ptr < len(order) and by_settle.loc[by_settle["event_ticker"] == order[ptr], "settle_time"].iloc[0] < t0:
+            for r in d[d["event_ticker"] == order[ptr]].itertuples():
+                w_n[r.word] = w_n.get(r.word, 0) + 1; w_hit[r.word] = w_hit.get(r.word, 0.0) + r.yes
+                co_n[r.co] = co_n.get(r.co, 0) + 1; co_hit[r.co] = co_hit.get(r.co, 0.0) + r.yes
+                tot_n += 1; tot_hit += r.yes
+            ptr += 1
+        gl = (tot_hit + 0.5 * 20) / (tot_n + 20)
+        for r in g.itertuples():
+            wr = (w_hit.get(r.word, 0.0) + a * gl) / (w_n.get(r.word, 0) + a)
+            co = r.co
+            cr = (co_hit.get(co, 0.0) + 5 * gl) / (co_n.get(co, 0) + 5)       # company 'talkativeness'
+            rows.append(dict(ticker=r.ticker, event_ticker=e, co=co, word=r.word, yes=r.yes, volume=r.volume,
+                             ev_open=t0, settle_time=r.settle_time, n_w=w_n.get(r.word, 0), global_rate=gl,
+                             word_rate=wr, co_rate=cr, count=r.count, doc_len=r.doc_len,
+                             density=1e4 * r.count / max(r.doc_len / 6, 1)))
+    f = pd.DataFrame(rows)
+    clip = lambda x: np.clip(x, 0.02, 0.98)
+    f["lw"] = np.log(clip(f["word_rate"]) / (1 - clip(f["word_rate"])))
+    f["lco"] = np.log(clip(f["co_rate"]) / (1 - clip(f["co_rate"])))
+    f["lcount"] = np.log1p(f["count"])
+    f["has_text"] = (f["count"] > 0).astype(float)
+    f["ldens"] = np.log1p(f["density"])
+    return f
+
+
+def earnings_walk_forward(f, block=15, burn_in_events=30):
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.ensemble import HistGradientBoostingClassifier
+    ev = f.drop_duplicates("event_ticker").sort_values("ev_open")
+    ev = ev.iloc[burn_in_events:]
+    sets = {"lr_prior": ["lw", "lco"], "lr_prior+text": ["lw", "lco", "lcount", "has_text", "ldens"]}
+    preds = []
+    for i in range(0, len(ev), block):
+        blk = ev.iloc[i:i + block]
+        t0 = blk["ev_open"].min()
+        tr = f[f["settle_time"] < t0]
+        te = f[f["event_ticker"].isin(blk["event_ticker"])].copy()
+        if len(tr) < 300 or tr["yes"].nunique() < 2:
+            continue
+        te["p_global"] = te["global_rate"]; te["p_word"] = te["word_rate"]
+        for name, cols in sets.items():
+            te["p_" + name] = LogisticRegression(C=1.0, max_iter=500).fit(tr[cols], tr["yes"]).predict_proba(te[cols])[:, 1]
+        g = ["lw", "lco", "lcount", "has_text", "ldens"]
+        te["p_gbm"] = HistGradientBoostingClassifier(max_depth=3, learning_rate=0.05, max_iter=120, l2_regularization=1.0,
+                                                     random_state=0).fit(tr[g], tr["yes"]).predict_proba(te[g])[:, 1]
+        preds.append(te)
+    return pd.concat(preds, ignore_index=True) if preds else pd.DataFrame()

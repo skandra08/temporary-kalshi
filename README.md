@@ -135,6 +135,19 @@ Look-ahead-safe engine, walk-forward validation, Probabilistic/Deflated Sharpe.
 The rain study and the BTC-digitals historical study are complete (above). The options-surface forward test is accumulating data. The breadth screen is complete (null). Next: the forecast-based model for daily-high-temperature ladders, a maker-side (quote-providing) test, and the options-surface forward test (needs a local collector).
 Forward data accumulates in `data_live/`.
 
+## Run it on your own machine (no cloud needed)
+```bash
+git clone https://github.com/skandra08/temporary-kalshi && cd temporary-kalshi
+bash scripts/setup_local.sh                     # venv + dependencies + tests
+source .venv/bin/activate
+export EDGAR_UA="kalshi-edge-research you@example.com"   # SEC asks for a contact in the User-Agent
+python scripts/earnings_experiment.py           # earnings-call mention markets + SEC filing text
+python scripts/mentions_sports_experiment.py    # announcer-mention markets (team / low-rank models)
+bash scripts/collect_forever.sh                 # forward data collector (leave running)
+```
+Notes: every Kalshi and SEC response is cached under `data/`, so runs are resumable. The first earnings
+run downloads roughly 400 SEC filings (about 1 GB, 30-60 minutes, limited by SEC and Kalshi rate limits).
+
 ## Run it
 ```bash
 git clone https://github.com/skandra08/kalshi-edge-research && cd kalshi-edge-research
