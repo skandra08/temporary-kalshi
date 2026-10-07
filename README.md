@@ -160,6 +160,18 @@ against Kalshi's own price 8 hours before the call (3,069 word-markets, 230 call
   on one season, so it needs a forward test (pre-registered rule, next earnings season).
 Scripts: `scripts/earnings_experiment.py`, `scripts/earnings_vs_market.py`; results in `results/earnings_*`.
 
+#### Pre-registered follow-up: is the "NO on 15-30c words" pattern real? (`PREREGISTRATION.md`)
+The earnings pattern was one of eight price buckets on one season, so it was frozen as a hypothesis (committed before
+any test-sample prices were looked at) and tested on data it was not found in. One rule, one test per sample:
+
+| Test | Sample | Result |
+|---|---|---|
+| **H1b** | 213 non-earnings mention contracts (sports, politics, TV; 79 events; Aug-Oct 2026) | **Not supported:** -3.1c per contract, 95% CI [-9.1, +2.5], exact p = 0.65. Realised YES 21% vs 23% priced; the 2-point overpricing is smaller than spread + fee. |
+| **H1a** | Earnings calls dated on/after 2026-10-08 (prospective) | Pending. Only ~100-150 qualifying contracts will accrue this season, so the decision waits for 300 (`scripts/prereg_h1a.py`). |
+
+Caveat on H1b: only 1,297 of 5,792 markets had a quote within 30 minutes of opening (22%), so it covers actively quoted
+markets. Conclusion so far: the earnings pattern does not generalise to other mention markets, and I am not claiming it.
+
 ### 5. `mmsim`: market making under adverse selection
 Hawkes-process order flow with price impact, Avellaneda-Stoikov quoting, and an intensity-aware
 extension, evaluated on common random numbers. Validated against analytic fill rates.

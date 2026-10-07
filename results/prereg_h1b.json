@@ -1,0 +1,13 @@
+{
+ "n_contracts": 213,
+ "n_events": 79,
+ "mean_pnl_cents": -3.1033990610328654,
+ "ci_lo_cents": -9.120442637919703,
+ "ci_hi_cents": 2.5204237370077474,
+ "win_rate": 0.7887323943661971,
+ "mean_yes_mid": 0.23330985915492955,
+ "realised_yes": 0.2112676056338028,
+ "p_boot_one_sided": 0.8446,
+ "p_exact_one_sided": 0.6539141514803363,
+ "supported": false
+}
