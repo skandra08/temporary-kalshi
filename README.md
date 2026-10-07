@@ -186,6 +186,14 @@ volume-weighted, event-clustered 95% CIs, fee 0.07 p (1-p) charged to takers:
 pre-registered quote-based test (H1b) found nothing for a taker buying NO at the posted ask. The profit most plausibly belongs
 to whoever *provides* liquidity to this flow, which depends on queue priority and cancellations that need order-book data to test.
 
+#### In progress: paper-trading a passive NO bidder with a queue model (`PREREGISTRATION.md`, addendum H2)
+The tape shows retail YES buyers lose; the open question is whether a *new* maker would actually get those fills. Kalshi's order
+book is public, so `scripts/book_collector.py` snapshots the book and records trades for the ~30 most active live mention markets
+every 45 seconds, and `scripts/paper_maker.py` replays a frozen rule: rest 1 NO behind the displayed queue, fill only when
+enough taker-YES volume trades through the queue ahead, mark to the settled outcome (P&L = ask - outcome, no maker fee). The rule,
+statistic and decision criterion were committed before any data was collected (commit `4079cbc`): supported only with >= 30 settled events
+and a clustered 95% CI above zero. No result yet; the queue logic has unit tests (`tests/test_papermaker.py`).
+
 ### 5. `mmsim`: market making under adverse selection
 Hawkes-process order flow with price impact, Avellaneda-Stoikov quoting, and an intensity-aware
 extension, evaluated on common random numbers. Validated against analytic fill rates.
