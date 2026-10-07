@@ -124,11 +124,47 @@ Benjamini-Hochberg FDR control at 5%, and replication in a held-out half of each
   detect), anything on the *maker* side (this tests taking only), and behaviour outside the last
   ~60 days. Raw results: `results/screen_results.csv`, `results/screen_pooled.csv`.
 
-### 4. `mmsim`: market making under adverse selection
+### 4. Mention markets: can ML (incl. low-rank / PCA structure and SEC filing text) beat the crowd?
+Kalshi's Mentions category is ~50,000 settled "will X say WORD during EVENT?" markets (earnings calls,
+sports broadcasts, press briefings; tens of millions of dollars traded). Data is sparse per company or team, so I tested
+whether models that borrow strength can predict which words get said. All evaluations are walk-forward:
+features for an event use only events that had *already settled* before it opened (mention markets close
+early on YES, so market lifetime leaks the outcome and is never used; prices are taken at a fixed pre-event time).
+
+**Sports announcer markets (539 games, 6 leagues): a null.** A per-word base rate is already strong
+(log loss 0.568 vs 0.669 for the series-wide rate), but team-by-word effects and a rank-3 SVD (PCA) smoothing of the
+team x word residual matrix add only -0.0014 log loss (95% CI [-0.0042, +0.0012]); gradient boosting overfits (+0.010).
+With 30-100 games per series the latent structure is too sparse to learn (`scripts/mentions_sports_experiment.py`).
+
+**Earnings calls (350 calls, 147 companies, 4,708 word-markets): real lift over a base rate, but the market is far sharper.**
+Features: each word's count in the company's most recent 10-Q/10-K (SEC EDGAR, filed before the market opened),
+a shrunk word prior and company "talkativeness" from earlier settled calls.
+
+| Model (walk-forward) | Log loss | vs per-word base rate (95% CI, clustered by call) |
+|---|---|---|
+| Per-word base rate | 0.6600 | n/a |
+| Word + company prior | 0.6629 | +0.0029 [-0.0008, +0.0066] |
+| **+ SEC filing word counts (logistic)** | **0.6424** | **-0.0176 [-0.0257, -0.0097]** |
+| Gradient boosting, same features | 0.6469 | -0.0131 [-0.0212, -0.0045] |
+
+The filing text carries real company-specific information that outcome history lacks. **But it is not an edge:**
+against Kalshi's own price 8 hours before the call (3,069 word-markets, 230 calls, average spread 3.6c):
+- **Accuracy:** market log loss 0.477 vs model 0.638 (gap +0.16, CI [0.14, 0.18]). The market is better in every
+  liquidity tercile, including the thinnest (0.37 vs 0.57), so I could not find a pocket where it is less informed.
+- **Adds information beyond the market?** Walk-forward stacking of market and model: -0.0032 log loss
+  [-0.0091, +0.0028], not significant.
+- **Fee-aware trading, threshold chosen on the first half and tested on the second:** -2.2c per contract
+  [-4.6, +0.4] for the model; +0.7c [-5.2, +6.2] for the stacked model (n=320, exact p=0.56).
+- **A pattern worth testing prospectively, not claiming:** the market looks mildly over-priced on YES for words
+  priced 15-30c (realised 15% vs 22% priced; buying NO +4.1c [0.7, 7.3]), but that is one of eight price buckets
+  on one season, so it needs a forward test (pre-registered rule, next earnings season).
+Scripts: `scripts/earnings_experiment.py`, `scripts/earnings_vs_market.py`; results in `results/earnings_*`.
+
+### 5. `mmsim`: market making under adverse selection
 Hawkes-process order flow with price impact, Avellaneda-Stoikov quoting, and an intensity-aware
 extension, evaluated on common random numbers. Validated against analytic fill rates.
 
-### 5. `quantlab`: bias-aware backtesting toolkit
+### 6. `quantlab`: bias-aware backtesting toolkit
 Look-ahead-safe engine, walk-forward validation, Probabilistic/Deflated Sharpe.
 
 ## Status
