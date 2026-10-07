@@ -33,3 +33,28 @@ not supported, with the point estimate.
 Selection: a market that resolves before the entry time has no quote and drops out (negligible for earnings,
 possible for non-earnings if an event starts within 30 minutes of the market opening). Taker only; fills at the
 quoted ask are assumed; one regime (Aug-Oct 2026 for H1b).
+
+---
+
+# Addendum H2 (frozen 2026-10-07, before any order-book data is collected): paper-trading a passive NO bidder
+
+**Motivation.** Trade-tape analysis (README, "who loses money in mention markets") shows retail-sized takers who
+buy YES lose several cents per contract; the maker side collects. Whether a *new* maker earns that depends on queue
+position, which a trade tape alone cannot show, so this test uses live order-book snapshots.
+
+**Ghost order (no real money).** At each snapshot of an open mention market whose best YES ask `a` satisfies
+`0.03 <= a <= 0.40`, create a hypothetical resting order buying 1 NO at price `1 - a` (i.e. selling YES at `a`),
+joining the back of the queue behind the displayed depth `D` at that level at snapshot time. It fills only when cumulative
+taker-YES-buy volume at yes-price `a` since posting exceeds `D` (no credit for queue jumping, and cancellations ahead of
+us are assumed not to occur, which is conservative). It is cancelled if the best ask rises above `a`, the market closes, or
+60 minutes pass. Maker fee 0 (verified per series; if a series charges maker fees they are deducted).
+
+**Statistic.** Per filled ghost order, P&L = `a - y` (y = 1 if the market resolves YES). Report fill rate, mean P&L per
+filled contract with 95% bootstrap CI clustered by event, and the same split by taker trade size. Supported only if the
+event-clustered CI lower bound is above 0 with at least 30 events; anything less is reported as not supported, with the
+estimate and the number of events. Snapshots are taken every 30 seconds, so ghost orders are overlapping and strongly
+dependent: this is why inference is by event, not by order.
+
+**Declared limitations.** Paper trading cannot capture market impact or our own information leakage; cancellations ahead of
+us would speed fills (so our fills are conservative) but queue jumpers could take them (so they are optimistic); markets
+studied are the most actively traded live mention markets, not a random sample; one regime (Oct 2026 onward).
