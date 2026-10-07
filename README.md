@@ -172,6 +172,20 @@ any test-sample prices were looked at) and tested on data it was not found in. O
 Caveat on H1b: only 1,297 of 5,792 markets had a quote within 30 minutes of opening (22%), so it covers actively quoted
 markets. Conclusion so far: the earnings pattern does not generalise to other mention markets, and I am not claiming it.
 
+#### Exploratory: who loses money in mention markets? (trade tape, `digitaledge/tape.py`)
+Trading is zero-sum before fees, so the maker side's gross P&L on every trade is exactly the negative of the taker's.
+Using all 428,000 trades in the 400 most liquid non-earnings mention markets (28M contracts, 62 events, Aug-Oct 2026),
+volume-weighted, event-clustered 95% CIs, fee 0.07 p (1-p) charged to takers:
+
+- Liquidity providers earned about **+0.8c gross per contract** [-0.3, +1.8] (not significant on 62 events).
+- **Retail-sized takers (under 20 contracts) lost -3.1c gross** [-5.5, -1.1] vs -0.4c for large takers [-1.4, +0.9].
+- Retail-sized **YES buyers lose at nearly every price**: -5.6c at 5-15c [-8.2, -1.9], -8.2c at 15-30c [-14.1, -1.9] after fees.
+- Lottery tickets: 9M contracts of YES bought at <= 5c lost -1.8c [-2.0, -1.6]; buying NO at those prices earned +1.35c [+0.9, +1.7] after fees.
+
+**Not an edge claim.** This is a tape I had already looked at, so these are leads. They are realised trade prices; the
+pre-registered quote-based test (H1b) found nothing for a taker buying NO at the posted ask. The profit most plausibly belongs
+to whoever *provides* liquidity to this flow, which depends on queue priority and cancellations that need order-book data to test.
+
 ### 5. `mmsim`: market making under adverse selection
 Hawkes-process order flow with price impact, Avellaneda-Stoikov quoting, and an intensity-aware
 extension, evaluated on common random numbers. Validated against analytic fill rates.
