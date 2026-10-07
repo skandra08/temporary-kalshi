@@ -1,6 +1,7 @@
 """Speech / press-briefing mention markets: does news attention in the days before an event predict which words get said,
 beyond word and speaker base rates, and beyond Kalshi's own price?   python scripts/news_experiment.py
 (needs data/mentions_markets.csv and the GDELT cache from digitaledge.news; resumable)"""
+import argparse
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -8,6 +9,9 @@ from digitaledge import news, scoring, screen as S
 from digitaledge.http import get_json
 from digitaledge.sources.kalshi import BASE
 
+ap = argparse.ArgumentParser()
+ap.add_argument("--cached-only", action="store_true", help="use only GDELT series already downloaded")
+args = ap.parse_args()
 START, END = pd.Timestamp("2026-08-08", tz="UTC"), pd.Timestamp("2026-10-07", tz="UTC")
 m = pd.read_csv("data/mentions_markets.csv", usecols=["series", "ticker", "event_ticker", "yes_sub_title", "open_time", "close_time", "result", "volume"])
 for c in ("open_time", "close_time"):
@@ -22,7 +26,7 @@ m = m.merge(ev[["ev_open", "settle"]], left_on="event_ticker", right_index=True)
 
 vol = {}
 for t in m.term.value_counts()[lambda v: v >= 8].index:
-    s = news.daily_volume(t)                      # cached; fetches politely if missing
+    s = news.daily_volume(t, cached_only=args.cached_only)   # cached; fetches politely if missing
     if len(s):
         vol[t] = s
 m = m[m.term.isin(vol)]

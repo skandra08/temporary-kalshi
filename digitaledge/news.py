@@ -25,12 +25,14 @@ def gdelt_query(label):
     return f"({q})" if len(alts) > 1 else q
 
 
-def daily_volume(label, start="20260707000000", end="20261006235959", spacing=12.0, retries=6):
+def daily_volume(label, start="20260707000000", end="20261006235959", spacing=12.0, retries=6, cached_only=False):
     q = gdelt_query(label)
     key = hashlib.sha1(f"{q}|{start}|{end}".encode()).hexdigest()
     path = CACHE / f"{key}.json"
     if path.exists():
         return pd.Series(json.loads(path.read_text()))
+    if cached_only:
+        return pd.Series(dtype=float)
     for attempt in range(retries):
         wait = _last[0] + spacing - time.monotonic()
         if wait > 0:
