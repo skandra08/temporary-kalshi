@@ -22,6 +22,8 @@ ap.add_argument("--hours", type=float, default=12)
 ap.add_argument("--every", type=float, default=45)
 ap.add_argument("--min-vol24", type=float, default=2000)
 ap.add_argument("--max-markets", type=int, default=45)
+ap.add_argument("--all-mentions", action="store_true", help="watch every Mentions series in data/series_catalog.csv")
+ap.add_argument("--fast-days", type=float, default=0, help="prioritise markets expected to settle within this many days")
 ap.add_argument("--levels", type=int, default=8)
 a = ap.parse_args()
 
@@ -39,7 +41,12 @@ def now_iso():
 
 def discover():
     rows = []
-    for s in a.series:
+    series = a.series
+    if a.all_mentions:
+        cat = pd.read_csv("data/series_catalog.csv")
+        series = cat[cat["category"] == "Mentions"]["ticker"].tolist()
+    now = pd.Timestamp.now(tz="UTC")
+    for s in series:
         try:
             d = get_json(f"{BASE}/markets", {"series_ticker": s, "status": "open", "limit": 300}, cache=False)
         except Exception:
@@ -50,9 +57,16 @@ def discover():
             except ValueError:
                 v = 0.0
             if v >= a.min_vol24:
-                rows.append((v, m["ticker"]))
-    rows.sort(reverse=True)
-    return [t for _, t in rows[:a.max_markets]]
+                prio = 1
+                if a.fast_days:
+                    try:
+                        exp = pd.Timestamp(m.get("expected_expiration_time") or m["close_time"])
+                        prio = 0 if exp <= now + pd.Timedelta(days=a.fast_days) else 1
+                    except (ValueError, KeyError):
+                        pass
+                rows.append((prio, -v, m["ticker"]))
+    rows.sort()
+    return [t for _, _, t in rows[:a.max_markets]]
 
 
 cycles = n_books = n_trades = 0
@@ -60,7 +74,7 @@ while time.time() < end:
     t0 = time.time()
     if t0 >= next_discover:
         tracked = discover()
-        next_discover = t0 + 600
+        next_discover = t0 + 900
         print(f"{now_iso()} tracking {len(tracked)} markets", flush=True)
     for tk in tracked:
         try:

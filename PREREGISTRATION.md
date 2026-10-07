@@ -58,3 +58,14 @@ dependent: this is why inference is by event, not by order.
 **Declared limitations.** Paper trading cannot capture market impact or our own information leakage; cancellations ahead of
 us would speed fills (so our fills are conservative) but queue jumpers could take them (so they are optimistic); markets
 studied are the most actively traded live mention markets, not a random sample; one regime (Oct 2026 onward).
+
+---
+
+# Amendment A1 to H2 (2026-10-07, before any data from the new universe exists)
+
+The collector originally tracked a fixed list of political mention series whose markets resolve about two weeks out (close
+dates Oct 21-23), so a decision (>= 30 settled events) would take months. **The ghost-order rule, statistic and decision criterion
+above are unchanged.** Only the *universe* is widened: all Kalshi Mentions series (sports broadcasts, press briefings, TV, politics,
+earnings), with priority for markets expected to settle within 3 days, so that settled events accumulate in days. Data already
+collected under the old universe stays in the sample. If results differ by market family, they are reported by family, but
+the decision uses the pooled sample as pre-specified.
