@@ -2,7 +2,9 @@
     python scripts/paper_maker.py
 Fill statistics are available immediately; P&L needs the markets to have settled (a - y per fill)."""
 import glob
+import gzip
 import json
+import sys
 import numpy as np
 import pandas as pd
 import requests
@@ -11,9 +13,12 @@ from digitaledge import screen as S
 from digitaledge.http import get_json
 from digitaledge.sources.kalshi import BASE
 
+DATA_DIR = sys.argv[1] if len(sys.argv) > 1 else "data_live"      # also reads the archived .jsonl.gz copies
+files = sorted(glob.glob(f"{DATA_DIR}/book_*.jsonl")) + sorted(glob.glob(f"{DATA_DIR}/book_*.jsonl.gz"))
 books, trades = [], []
-for fp in sorted(glob.glob("data_live/book_*.jsonl")):
-    for line in open(fp):
+for fp in files:
+    opener = gzip.open if fp.endswith(".gz") else open
+    for line in opener(fp, "rt"):
         try:
             r = json.loads(line)
         except ValueError:
