@@ -5,3 +5,4 @@ data/
 results/live_snapshots.csv
 *.egg-info/
 .DS_Store
+data_live/book_*.jsonl
