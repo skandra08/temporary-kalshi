@@ -16,6 +16,8 @@ ap.add_argument("--episodes", type=int, default=3000)
 ap.add_argument("--eta", type=float, default=0.5)
 ap.add_argument("--test-paths", type=int, default=400)
 ap.add_argument("--seed", type=int, default=0)
+ap.add_argument("--keep-best", action="store_true", help="evaluate the checkpoint with the best validation P&L, not the last")
+ap.add_argument("--tag", default="")
 a = ap.parse_args()
 
 base = FlowParams()
@@ -23,6 +25,7 @@ ood = FlowParams(mu=0.3, alpha_same=0.6, alpha_cross=0.1, impact=0.8, sigma=0.45
 agent = QAgent(seed=a.seed)
 val_paths = [simulate_path(base, 50_000 + k) for k in range(40)]
 curve = []
+best = (-1e18, None)
 
 
 def val_mean():
@@ -36,7 +39,14 @@ for ep in range(1, a.episodes + 1):
     run_episode(simulate_path(base, ep), agent, eps=eps, learn=True, eta=a.eta)
     if ep % max(1, a.episodes // 10) == 0:
         curve.append((ep, val_mean()))
+        if curve[-1][1] > best[0]:
+            best = (curve[-1][1], agent.W.copy())
         print(f"episode {ep:6d}  validation mean P&L {curve[-1][1]:8.1f} ticks   ({time.time() - t0:.0f}s)", flush=True)
+
+
+if a.keep_best and best[1] is not None:
+    agent.W = best[1]
+    print(f"using best-validation checkpoint (validation P&L {best[0]:.1f})", flush=True)
 
 
 def evaluate(params, n, seed0, label):
@@ -60,9 +70,9 @@ def evaluate(params, n, seed0, label):
 results = {"episodes": a.episodes, "eta": a.eta, "curve": curve,
            "in_distribution": evaluate(base, a.test_paths, 100_000, "IN-DISTRIBUTION (same flow as training)"),
            "out_of_distribution": evaluate(ood, a.test_paths, 200_000, "OUT-OF-DISTRIBUTION (stronger clustering, impact, volatility)")}
-json.dump(results, open("results/rl_mm_results.json", "w"), indent=1)
+json.dump(results, open(f"results/rl_mm_results{a.tag}.json", "w"), indent=1)
 fig, ax = plt.subplots(figsize=(6, 3.4))
 ax.plot(*zip(*curve), "o-"); ax.axhline(results["in_distribution"]["avellaneda-stoikov"]["pnl"], color="k", ls="--", lw=.8, label="Avellaneda-Stoikov (test)")
 ax.set_xlabel("training episodes"); ax.set_ylabel("validation P&L (ticks)"); ax.legend(); ax.set_title("RL market maker learning curve")
-fig.tight_layout(); fig.savefig("results/rl_mm_learning_curve.png", dpi=130)
+fig.tight_layout(); fig.savefig(f"results/rl_mm_learning_curve{a.tag}.png", dpi=130)
 print("\nDONE", flush=True)
