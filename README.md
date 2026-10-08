@@ -1,8 +1,26 @@
-# kalshi-edge-research
+# Prediction-Market Edge Research (Kalshi)
 
-Quantitative research on **prediction-market pricing**: where Kalshi's prices are efficient,
-where they are not, and whether any gap survives fees. Everything is tested on real settled
-outcomes with event-clustered inference and walk-forward (never in-sample) evaluation.
+Quantitative research on **prediction-market pricing**: where Kalshi's prices are efficient, where they are not, and whether any gap
+survives fees. Every claim is tested on real settled outcomes with event-clustered inference, walk-forward (never in-sample)
+evaluation, and, for the leads that survived, pre-registered follow-up tests. **Headline: Kalshi's liquid markets were priced better than every
+model I built; taking liquidity loses roughly the spread plus the fee almost everywhere. Null results are reported as null.**
+
+## Key findings
+
+| Question | Answer |
+|---|---|
+| Can volatility/options models beat Kalshi's hourly BTC ladder? | **No.** The best (Student-t on a realised-vol forecast) trails the market by ~0.002 Brier; trading it loses ~0.6c per contract after fees. No arbitrage inside the strike ladders. |
+| "Bet NO on rain, every time"? | **Partly.** The market overprices rain: NO earns +1.4 to +2.5c if bought 6-18h before close; the "YES under 10c" version replicated out of sample (+2.0c). A weather-forecast model scored *worse* than the market. |
+| Do simple rules work across 103 recurring series? | **No.** 0 of 736 tests survive false-discovery control plus replication; taker rules lose ~spread + fee (NO on everything: -5.6c). The rain pattern does not generalise. |
+| Can ML beat the crowd on mention markets? | **Lift, not edge.** SEC-filing text improves on a per-word base rate (-0.0176 log loss) but Kalshi's price is far sharper (0.477 vs 0.638); sports team/PCA structure adds nothing. |
+| Is the "NO on 15-30c words" lead real (pre-registered)? | **Not supported** (-3.1c, p = 0.65 on a new sample). |
+| Does a passive maker earn the retail flow's losses? | **Open.** Trade tape: retail-sized YES buyers lose several cents; the live queue-aware paper-trading test has 6 of the 30 settled events its frozen criterion needs. |
+| Does an RL market maker beat Avellaneda-Stoikov? | **On mean P&L, yes (4/4 seeds); risk-adjusted, no (Sharpe 6.2 vs 8.7), and brittle out-of-distribution.** |
+
+**What makes the results trustworthy:** event-clustered bootstrap (strikes in one event are not independent); walk-forward models;
+exact tests where a bootstrap breaks (all-win samples); Benjamini-Hochberg control with replication; pre-registered hypotheses
+(`PREREGISTRATION.md`); a simulator-equivalence test for the RL environment. Several early "discoveries" were artifacts and were
+caught and fixed (degenerate bootstrap, lifetime leakage in mention markets, a 404 retry bug); the commit history shows each.
 
 ## Projects
 
@@ -231,40 +249,34 @@ each, evaluated on 400 held-out paths per regime (seed 0 uses its final checkpoi
 Look-ahead-safe engine, walk-forward validation, Probabilistic/Deflated Sharpe.
 
 ## Status
-The rain study and the BTC-digitals historical study are complete (above). The options-surface forward test is accumulating data. The breadth screen is complete (null). Next: the forecast-based model for daily-high-temperature ladders, a maker-side (quote-providing) test, and the options-surface forward test (needs a local collector).
-Forward data accumulates in `data_live/`.
-
-## Run it on your own machine (no cloud needed)
-```bash
-git clone https://github.com/skandra08/temporary-kalshi && cd temporary-kalshi
-bash scripts/setup_local.sh                     # venv + dependencies + tests
-source .venv/bin/activate
-export EDGAR_UA="kalshi-edge-research you@example.com"   # SEC asks for a contact in the User-Agent
-python scripts/earnings_experiment.py           # earnings-call mention markets + SEC filing text
-python scripts/mentions_sports_experiment.py    # announcer-mention markets (team / low-rank models)
-bash scripts/collect_forever.sh                 # forward data collector (leave running)
-```
-Notes: every Kalshi and SEC response is cached under `data/`, so runs are resumable. The first earnings
-run downloads roughly 400 SEC filings (about 1 GB, 30-60 minutes, limited by SEC and Kalshi rate limits).
+Complete: BTC digitals, rain, 103-series screen, mention-market ML, RL market maker. In progress: the pre-registered queue-aware paper-trading test
+(`PREREGISTRATION.md`, addendum H2; collector in `scripts/book_collector.py`, results via `scripts/paper_maker.py`) and the earnings forward test (H1a,
+`scripts/prereg_h1a.py`). Both need weeks of data; interim numbers are explicitly non-decisive.
 
 ## Run it
 ```bash
-git clone https://github.com/skandra08/kalshi-edge-research && cd kalshi-edge-research
-pip install -e ".[dev]"
-pytest -q                                   # 33 tests
-python -m digitaledge study --start 2026-09-15 --end 2026-10-05
-bash scripts/collect_forever.sh             # local forward-data collector
-python -m digitaledge.live                  # one live snapshot vs the options surface
+git clone https://github.com/skandra08/temporary-kalshi && cd temporary-kalshi
+bash scripts/setup_local.sh                     # venv + dependencies + 56 tests
+source .venv/bin/activate
+export EDGAR_UA="kalshi-edge-research you@example.com"   # SEC asks for a contact in the User-Agent
+python -m digitaledge study --start 2026-09-15 --end 2026-10-05   # BTC digitals study
+python scripts/rain_report.py                   # rain study (needs data/rain_*.csv from digitaledge.recurring)
+python scripts/earnings_experiment.py           # earnings-call mention markets + SEC filing text
+python scripts/mentions_sports_experiment.py    # announcer-mention markets (team / low-rank models)
+python scripts/rl_mm_experiment.py --episodes 3000 --keep-best   # RL market maker vs Avellaneda-Stoikov
+bash scripts/start_collection.sh ~/temporary-kalshi 336         # live order-book collector + archive loop (weeks)
+python scripts/paper_maker.py data_live         # apply the frozen paper-trading rule to what was collected
 ```
-Public API responses are cached under `data/`, so reruns are fast and resumable (Kalshi
-rate-limits, so first pulls are slow).
+Every Kalshi and SEC response is cached under `data/`, so runs are resumable. First pulls are slow (Kalshi and SEC rate limits; the
+earnings run downloads about 1 GB of filings).
 
 ## Layout
 ```
-digitaledge/  data sources, vol models, digital pricing, SVI, scoring, backtest, rain study, collector
-mmsim/        Hawkes market-making simulator
-quantlab/     backtesting toolkit
-tests/        33 tests, all offline (synthetic data with known ground truth)
-scripts/      local collector loop
-data_live/    forward snapshots (gzip CSV)
+digitaledge/  data sources, vol models, digital pricing, SVI, scoring, backtest, screen, mention/earnings models, tape, paper-maker, collectors
+mmsim/        Hawkes market-making simulator, strategies, RL agent
+quantlab/     bias-aware backtesting toolkit
+tests/        56 tests, all offline (synthetic data with known ground truth)
+scripts/      reproducible experiments, collectors, local setup
+results/      tables, figures and raw numbers behind every claim above
+PREREGISTRATION.md   hypotheses frozen before testing (H1a/H1b, H2 + amendment)
 ```
