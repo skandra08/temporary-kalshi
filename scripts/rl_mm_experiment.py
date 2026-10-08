@@ -14,6 +14,8 @@ from mmsim.rl import QAgent, RLQuoter, run_episode
 ap = argparse.ArgumentParser()
 ap.add_argument("--episodes", type=int, default=3000)
 ap.add_argument("--eta", type=float, default=0.5)
+ap.add_argument("--phi", type=float, default=0.0, help="per-step quadratic inventory penalty in the training reward")
+ap.add_argument("--select", choices=["mean", "sharpe"], default="mean", help="checkpoint criterion on validation paths")
 ap.add_argument("--test-paths", type=int, default=400)
 ap.add_argument("--seed", type=int, default=0)
 ap.add_argument("--keep-best", action="store_true", help="evaluate the checkpoint with the best validation P&L, not the last")
@@ -29,19 +31,20 @@ best = (-1e18, None)
 
 
 def val_mean():
-    return float(np.mean([run_episode(p, agent, eps=0.0, learn=False, eta=a.eta)[0] for p in val_paths]))
+    x = np.array([run_episode(p, agent, eps=0.0, learn=False, eta=a.eta)[0] for p in val_paths])
+    return float(x.mean()) if a.select == "mean" else float(x.mean() / (x.std() + 1e-9))
 
 
 t0 = time.time()
 curve.append((0, val_mean()))
 for ep in range(1, a.episodes + 1):
     eps = max(0.02, 0.3 * (1 - ep / (0.7 * a.episodes)))
-    run_episode(simulate_path(base, ep), agent, eps=eps, learn=True, eta=a.eta)
+    run_episode(simulate_path(base, ep), agent, eps=eps, learn=True, eta=a.eta, phi=a.phi)
     if ep % max(1, a.episodes // 10) == 0:
         curve.append((ep, val_mean()))
         if curve[-1][1] > best[0]:
             best = (curve[-1][1], agent.W.copy())
-        print(f"episode {ep:6d}  validation mean P&L {curve[-1][1]:8.1f} ticks   ({time.time() - t0:.0f}s)", flush=True)
+        print(f"episode {ep:6d}  validation {a.select} {curve[-1][1]:8.2f}   ({time.time() - t0:.0f}s)", flush=True)
 
 
 if a.keep_best and best[1] is not None:
@@ -67,7 +70,7 @@ def evaluate(params, n, seed0, label):
     return out
 
 
-results = {"episodes": a.episodes, "eta": a.eta, "curve": curve,
+results = {"episodes": a.episodes, "eta": a.eta, "phi": a.phi, "select": a.select, "curve": curve,
            "in_distribution": evaluate(base, a.test_paths, 100_000, "IN-DISTRIBUTION (same flow as training)"),
            "out_of_distribution": evaluate(ood, a.test_paths, 200_000, "OUT-OF-DISTRIBUTION (stronger clustering, impact, volatility)")}
 json.dump(results, open(f"results/rl_mm_results{a.tag}.json", "w"), indent=1)

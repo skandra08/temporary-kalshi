@@ -59,7 +59,7 @@ class QAgent:
         return delta
 
 
-def run_episode(path: Path, agent, eps=0.0, learn=True, max_inv=10, eta=0.5):
+def run_episode(path: Path, agent, eps=0.0, learn=True, max_inv=10, eta=0.5, phi=0.0):
     """Play one path. Returns (true terminal P&L, final inventory, number of fills, inventory std)."""
     p, n = path.params, len(path.t)
     cash, q, prev_value, fills = 0.0, 0, 0.0, 0
@@ -79,7 +79,7 @@ def run_episode(path: Path, agent, eps=0.0, learn=True, max_inv=10, eta=0.5):
         last = i == n - 1
         m_next = path.mid_post[-1] if last else path.mid_pre[i + 1]
         value = cash + q * m_next
-        r = (value - prev_value) - eta * max(0.0, q * (m_next - mid))
+        r = (value - prev_value) - eta * max(0.0, q * (m_next - mid)) - phi * q * q      # phi: per-step quadratic inventory penalty
         prev_value = value
         if not last:
             idx_next = agent.tc.active(normalise(path.t[i + 1], q, path.exc_buy[i + 1], path.exc_sell[i + 1], p.horizon, max_inv))
