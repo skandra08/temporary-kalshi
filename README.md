@@ -202,9 +202,30 @@ enough taker-YES volume trades through the queue ahead, mark to the settled outc
 statistic and decision criterion were committed before any data was collected (commit `4079cbc`): supported only with >= 30 settled events
 and a clustered 95% CI above zero. No result yet; the queue logic has unit tests (`tests/test_papermaker.py`).
 
-### 5. `mmsim`: market making under adverse selection
-Hawkes-process order flow with price impact, Avellaneda-Stoikov quoting, and an intensity-aware
-extension, evaluated on common random numbers. Validated against analytic fill rates.
+### 5. `mmsim`: market making under adverse selection, and an RL market maker
+Hawkes-process order flow with price impact (buys and sells cluster; each order moves the mid), Avellaneda-Stoikov (A-S) quoting, and an
+intensity-aware extension, all evaluated on common random numbers (every strategy trades the identical simulated paths) and validated against
+analytic fill rates.
+
+**RL market maker (`mmsim/rl.py`, `scripts/rl_mm_experiment.py`): a reproduction of the approach in Spooner et al. (2018).** Linear Q-learning
+over tile-coded state (inventory, time, buy/sell excitation), actions = (bid, ask) distances, asymmetrically dampened P&L reward, numpy only. A test
+checks that the RL environment reproduces the validated simulator's P&L exactly for a fixed policy. Five agents (seeds 0-4), 3,000 training episodes
+each, evaluated on 400 held-out paths per regime (seed 0 uses its final checkpoint, seeds 1-4 the best-validation checkpoint):
+
+| In-distribution (same flow as training) | Mean P&L | Sharpe | Inventory sd |
+|---|---|---|---|
+| Fixed 2-tick spread | 526.3 | 3.40 | 5.4 |
+| Avellaneda-Stoikov | 479.7 | **8.72** | 1.5 |
+| Hawkes-aware A-S (this repo) | 506.2 | **8.81** | 1.4 |
+| **RL agent** (mean of seeds 1-4) | 511.9 | 6.23 | 2.6 |
+
+- The RL agent beats A-S on mean P&L in **4/4 seeds** (+17.6 to +52.3 ticks per path, every paired 95% CI above zero), but loses on Sharpe in **4/4**: it
+  earns more by holding more inventory risk. The intensity-aware A-S baseline beats every RL seed on risk-adjusted terms.
+- **Out-of-distribution** (stronger clustering, impact and volatility than in training): inconsistent across seeds (+66, +7, -60, +15 ticks vs A-S; only one
+  of four clearly better) and Sharpe is below A-S in 4/4 (1.06 vs 2.50), while the intensity-aware A-S stays best (+64.7 ticks).
+- The validation curve is non-monotone (peaks near episode 1,800 then drifts down for seed 0), which is why later runs checkpoint on validation P&L.
+- Limits: stylised flow, one reward shape and no hyperparameter tuning (a stronger inventory penalty would trade mean for risk), so this shows
+  the *failure modes* of the method here, not that RL cannot work.
 
 ### 6. `quantlab`: bias-aware backtesting toolkit
 Look-ahead-safe engine, walk-forward validation, Probabilistic/Deflated Sharpe.
