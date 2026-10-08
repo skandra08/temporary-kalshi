@@ -242,6 +242,9 @@ each, evaluated on 400 held-out paths per regime (seed 0 uses its final checkpoi
 - **Out-of-distribution** (stronger clustering, impact and volatility than in training): inconsistent across seeds (+66, +7, -60, +15 ticks vs A-S; only one
   of four clearly better) and Sharpe is below A-S in 4/4 (1.06 vs 2.50), while the intensity-aware A-S stays best (+64.7 ticks).
 - The validation curve is non-monotone (peaks near episode 1,800 then drifts down for seed 0), which is why later runs checkpoint on validation P&L.
+- **A per-step inventory penalty does not close the Sharpe gap** (seed 1, penalty phi in {0.0005, 0.002, 0.005, 0.01}, checkpoints chosen on validation
+  Sharpe): Sharpe stays at 7.1-7.5 vs 7.2 unpenalised and 8.72 for A-S; mean P&L vs A-S wanders between -8 and +19 ticks non-monotonically, so seed and
+  checkpoint noise dominates the effect. Out-of-distribution Sharpe stays ~1.4 vs 2.5 for A-S. One seed per setting: a pointer, not a proof.
 - Limits: stylised flow, one reward shape and no hyperparameter tuning (a stronger inventory penalty would trade mean for risk), so this shows
   the *failure modes* of the method here, not that RL cannot work.
 
