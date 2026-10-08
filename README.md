@@ -186,6 +186,14 @@ volume-weighted, event-clustered 95% CIs, fee 0.07 p (1-p) charged to takers:
 pre-registered quote-based test (H1b) found nothing for a taker buying NO at the posted ask. The profit most plausibly belongs
 to whoever *provides* liquidity to this flow, which depends on queue priority and cancellations that need order-book data to test.
 
+#### Exploratory: can ML pick the safe fills for a maker? (`scripts/toxicity_model.py`): no
+For a maker selling YES at price p, P&L is p - y. On the 143,840 taker-YES trades priced 3-40c in the tape (5.4M contracts, 60 events),
+a gradient-boosted model predicted y from strictly past market activity (price, trade size, 10-minute price momentum, flow imbalance,
+volume, market age), 5-fold CV grouped by event. **It added nothing:** out-of-fold AUC 0.848 vs 0.876 for the price alone.
+Accepting only the fills the model rated positive-EV moved maker P&L from +2.44c [-0.42, +5.16] to +2.86c [+0.24, +5.35] per contract
+(overlapping, and no better than a price rule). The descriptive result stands: the passive side of small-trade (<20 contracts) flow earned
++5.1c per contract [+1.3, +9.1]. Exploratory, ex-post on a tape already examined, and silent on queue priority, which is what the live test measures.
+
 #### In progress: paper-trading a passive NO bidder with a queue model (`PREREGISTRATION.md`, addendum H2)
 The tape shows retail YES buyers lose; the open question is whether a *new* maker would actually get those fills. Kalshi's order
 book is public, so `scripts/book_collector.py` snapshots the book and records trades for the ~30 most active live mention markets
