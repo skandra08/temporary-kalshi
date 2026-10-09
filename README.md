@@ -17,6 +17,7 @@ model I built; taking liquidity loses roughly the spread plus the fee almost eve
 | Does a passive maker earn the retail flow's losses? | **Open.** Trade tape: retail-sized YES buyers lose several cents; the live queue-aware paper-trading test has 6 of the 30 settled events its frozen criterion needs. |
 | Does an RL market maker beat Avellaneda-Stoikov? | **On mean P&L, yes (4/4 seeds); risk-adjusted, no (Sharpe 6.2 vs 8.7), and brittle out-of-distribution.** |
 | Are Kalshi's own bracket-ladder intervals calibrated? (conformal prediction) | **No, they are too wide: nominal 90% sets cover 93%.** Split-conformal and adaptive-conformal recalibration restore 90% with ~6-10% narrower sets. |
+| Does knowing *who* bet (Dawid-Skene trader reliability) add information beyond the price? (Manifold, 8.4k markets) | **Barely: log loss -0.0026 at 20 bets [CI -0.0040, -0.0013], not significant at 50 bets; the shuffled-identity null gives ~0.** |
 
 **What makes the results trustworthy:** event-clustered bootstrap (strikes in one event are not independent); walk-forward models;
 exact tests where a bootstrap breaks (all-win samples); Benjamini-Hochberg control with replication; pre-registered hypotheses
@@ -271,6 +272,28 @@ PIT randomisations; CIs bootstrap over events. Split conformal calibrates on the
 - **Conformal recalibration fixes coverage and tightens the sets by about 6-10%**, so the information in the ladder is slightly underused rather than wrong. ACI matches the target online without a held-out calibration block.
 - **Conditional coverage is uneven across series:** at 90% the per-series split-conformal coverage ranges from about 0.73-0.87 up to 0.94-1.00 (median ~0.9, series with at least 8 test events), so the marginal guarantee does not carry over to each city.
 - Limits: mostly daily-temperature ladders from one summer-to-autumn window, and a 40/60 split of a short sample, so this says nothing about other seasons or other market types. The effect is real but small; it is a calibration finding, not an edge.
+
+### 5c. Trader reliability from bets (`crowdskill/`, `scripts/crowdskill_study.py`): Dawid-Skene on Manifold Markets
+
+A different venue and dataset from everything above (public Manifold Markets API, 8,493 resolved YES/NO binary markets with 20-400 bettors,
+created roughly Mar 2024 - Oct 2026). Idea from crowd-labelling (Dawid & Skene, 1979): treat each bettor's net direction in a market as a
+noisy vote on the eventual outcome, learn each bettor's confusion matrix from resolved markets, and ask whether the weighted votes carry
+information the price does not already contain.
+
+- **Vote** = sign of a bettor's net stake in the first K bets (K = 20 or 50); **anchor price** = price after the K-th bet.
+- **Evidence** = sum over voters of log P(vote | YES) / P(vote | NO) from Dirichlet-smoothed per-bettor counts, using only markets that had
+  already *resolved before the anchor time* (a prequential replay, no look-ahead; unit-tested).
+- **Aggregator** = logistic regression on logit(price) and evidence. Trained on the first 60% of anchors whose labels resolved before the test window; tested on the last 40%.
+- **Null** = within each market, randomly reassign the observed votes among its voters (a plain relabelling of user ids would be a no-op, which my first null mistakenly was; it gave identical numbers, and I fixed it).
+
+| K | markets (test) | Price | Price recalibrated | + evidence | Δ log loss vs recalibrated price [95% CI, bootstrap over markets] | Same with shuffled votes |
+|---|---|---|---|---|---|---|
+| 20 | 8,416 (3,367) | 0.5791 | 0.5730 | **0.5704** | **-0.0026 [-0.0040, -0.0013]** | -0.0002 [-0.0004, +0.0000] |
+| 50 | 5,672 (2,269) | 0.4590 | 0.4577 | 0.4575 | -0.0002 [-0.0016, +0.0012] | +0.0001 [-0.0000, +0.0001] |
+
+- Early in a market's life (20 bets), who is betting carries a small amount of genuine information: the improvement is about 0.4% of log loss and vanishes under the shuffled-votes null. By 50 bets the price has absorbed it and the gain is statistically zero.
+- Most of the early gain over the raw price is simply **recalibration**: the fitted slope on logit(price) is 0.85 at K = 20, i.e. early Manifold prices are overconfident, and shrinking them helps more than the bettor evidence does.
+- Limits: markets are required to have at least K bets (selection on future activity), one time split, a single venue with play money, and no per-bettor staking or market-category structure. This is a measurement of how much reliability information exists, not a forecasting product.
 
 ### 6. `quantlab`: bias-aware backtesting toolkit
 Look-ahead-safe engine, walk-forward validation, Probabilistic/Deflated Sharpe.

@@ -28,3 +28,10 @@ def test_logit_recovers_weights():
     y = (rng.random(20000) < 1 / (1 + np.exp(-(w[0] + X @ w[1:])))).astype(float)
     assert np.abs(fit_logit(X, y, l2=1e-6) - w).max() < 0.08
     assert 0 < predict(fit_logit(X, y), X).min()
+
+
+def test_shuffle_null_changes_evidence():
+    recs = [_rec(i, 100 + i, {"a": 1, "b": -1, "c": 1}, i % 2) for i in range(60)]
+    for r in recs: r["resolve_t"] = r["anchor_t"] + 0.1
+    real = replay_features(recs); null = replay_features(recs, shuffle_users=True, seed=1)
+    assert not np.allclose(real.evidence, null.evidence)

@@ -63,9 +63,13 @@ class Confusion:
 def replay_features(records, prior: float = 2.0, shuffle_users: bool = False, seed: int = 0):
     """Prequential features: evidence at each anchor uses only markets resolved before that anchor."""
     rng = np.random.default_rng(seed)
-    if shuffle_users:   # null: break identity but keep vote structure (permute user ids across the whole sample)
-        ids = sorted({u for r in records for u in r["votes"]}); perm = dict(zip(ids, rng.permutation(ids)))
-        records = [{**r, "votes": {perm[u]: v for u, v in r["votes"].items()}} for r in records]
+    if shuffle_users:   # null: within each market, reassign the observed votes among its voters at random.
+        # (A consistent relabelling of user ids across markets would change nothing, so it is not a null.)
+        sh = []
+        for r in records:
+            us = list(r["votes"]); vs = rng.permutation(list(r["votes"].values()))
+            sh.append({**r, "votes": dict(zip(us, [int(v) for v in vs]))})
+        records = sh
     conf = Confusion(prior)
     pending = []   # heap of (resolve_t, idx)
     for i, r in enumerate(records): heapq.heappush(pending, (r["resolve_t"], i))
