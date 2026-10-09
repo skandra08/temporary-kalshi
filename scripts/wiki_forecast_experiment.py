@@ -77,8 +77,10 @@ for m in methods:
     if m == "DeepAR":
         r["wQL_diff_vs_best_baseline"] = boot(loss[m] - loss[best]); r["best_baseline"] = best
         r["win_rate_vs_best_baseline"] = float((loss[m] < loss[best]).mean())
+    med = P[m][:, :, list(QS).index(0.5)]
+    r["median_bias (sum(median-y)/sum(y); 0 is unbiased)"] = boot((med - truth).sum((1, 2)) / (truth.sum((1, 2)) + 1e-9))
     out["methods"][m] = r
-    print(f"{m:26s} wQL {r['wQL'][0]:.4f} [{r['wQL'][1]:.4f},{r['wQL'][2]:.4f}]  cov90 {r['coverage_90 (nominal .90)'][0]:.3f}  cov50 {r['coverage_50 (nominal .50)'][0]:.3f}")
+    print(f"{m:26s} wQL {r['wQL'][0]:.4f} [{r['wQL'][1]:.4f},{r['wQL'][2]:.4f}]  cov90 {r['coverage_90 (nominal .90)'][0]:.3f}  cov50 {r['coverage_50 (nominal .50)'][0]:.3f}  median bias {r['median_bias (sum(median-y)/sum(y); 0 is unbiased)'][0]:+.3f}")
 d = out["methods"]["DeepAR"]["wQL_diff_vs_best_baseline"]
 print(f"DeepAR - {best}: {d[0]:+.4f} [{d[1]:+.4f}, {d[2]:+.4f}]  win rate {out['methods']['DeepAR']['win_rate_vs_best_baseline']:.2f}")
 out["by_spikiness_tercile"] = {}
@@ -86,4 +88,4 @@ for t, lab in enumerate(["calm", "medium", "spiky"]):
     s = terc == t
     out["by_spikiness_tercile"][lab] = {m: {"wQL": float(loss[m][s].mean()), "cov90": float(cover(P[m], .05, .95)[s].mean())} for m in ("DeepAR", best)}
     print(lab, out["by_spikiness_tercile"][lab])
-Path("results").mkdir(exist_ok=True); Path("results/wiki_forecast_results.json").write_text(json.dumps(out, indent=1))
+Path("results").mkdir(exist_ok=True); Path(f"results/wiki_forecast_results_steps{a.steps}.json").write_text(json.dumps(out, indent=1))
