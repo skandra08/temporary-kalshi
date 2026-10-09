@@ -18,6 +18,7 @@ model I built; taking liquidity loses roughly the spread plus the fee almost eve
 | Does an RL market maker beat Avellaneda-Stoikov? | **On mean P&L, yes (4/4 seeds); risk-adjusted, no (Sharpe 6.2 vs 8.7), and brittle out-of-distribution.** |
 | Are Kalshi's own bracket-ladder intervals calibrated? (conformal prediction) | **No, they are too wide: nominal 90% sets cover 93%.** Split-conformal and adaptive-conformal recalibration restore 90% with ~6-10% narrower sets. |
 | Does knowing *who* bet (Dawid-Skene trader reliability) add information beyond the price? (Manifold, 8.4k markets) | **Barely: log loss -0.0026 at 20 bets [CI -0.0040, -0.0013], not significant at 50 bets; the shuffled-identity null gives ~0.** |
+| Does a neural hedger (Buehler et al. 2019 deep hedging) beat Black-Scholes delta under costs? | **Digital option: yes, CVaR95 -28% vs the best tuned baseline. Call: only -1.7%.** Single seed; hedger gets no benefit from seeing the variance. |
 
 **What makes the results trustworthy:** event-clustered bootstrap (strikes in one event are not independent); walk-forward models;
 exact tests where a bootstrap breaks (all-win samples); Benjamini-Hochberg control with replication; pre-registered hypotheses
@@ -294,6 +295,25 @@ information the price does not already contain.
 - Early in a market's life (20 bets), who is betting carries a small amount of genuine information: the improvement is about 0.4% of log loss and vanishes under the shuffled-votes null. By 50 bets the price has absorbed it and the gain is statistically zero.
 - Most of the early gain over the raw price is simply **recalibration**: the fitted slope on logit(price) is 0.85 at K = 20, i.e. early Manifold prices are overconfident, and shrinking them helps more than the bettor evidence does.
 - Limits: markets are required to have at least K bets (selection on future activity), one time split, a single venue with play money, and no per-bettor staking or market-category structure. This is a measurement of how much reliability information exists, not a forecasting product.
+
+### 5d. Deep hedging (`deephedge/`, `scripts/deep_hedge_experiment.py`): reproduction of Buehler, Gonon, Teichmann & Wood (2019)
+
+A neural-network hedger trained directly on CVaR95 of hedging loss (Rockafellar-Uryasev form, torch, CPU) for a European call and a digital
+option under **Heston** dynamics with 0.5% proportional transaction costs, 30 daily rebalances, zero rates. The network is a small Markov MLP
+whose inputs include its previous position (the path memory) and outputs a correction on top of the Black-Scholes delta. Baselines are
+BS delta with constant vol, BS delta with the true spot vol (an oracle), and BS delta with a no-trade band whose width was tuned
+for CVaR on a separate simulation. Test set: 200,000 fresh paths; the CI is a paired bootstrap over paths. Loss is `payoff - hedging gains + costs`
+(the premium is omitted since CVaR is translation-invariant); lower is better.
+
+| Option | BS delta | BS delta, spot vol | BS delta + tuned band | Deep hedger (S only) | Deep hedger (S and v) | Deep vs tuned band, CVaR95 [95% CI] |
+|---|---|---|---|---|---|---|
+| Call | 0.0548 | 0.0520 | 0.0469 (band 0.10) | 0.0461 | 0.0461 | -0.0008 [-0.0009, -0.0007] (-1.7%) |
+| Digital (payoff 1) | 1.376 | 1.427 | 1.358 (band 0.15) | 0.981 | 0.981 | -0.377 [-0.381, -0.374] (-28%) |
+
+- With costs, the hedger beats plain delta hedging in both cases, as in the paper. Against a *tuned no-trade band*, the call gain is small (1.7%), because a band already captures most of what cost-aware hedging can do.
+- The gain is large for the **digital option**, where the delta explodes near expiry and the payoff is discontinuous: the learned policy stops chasing the delta. The mean loss is also lower (0.596 vs 0.745) but its standard deviation is higher (0.37 vs 0.21), which is expected when optimising a tail-risk objective, not a variance objective.
+- Giving the network the variance state gave no measurable benefit, i.e. spot-only information is enough here.
+- Limits: one training seed and one cost level (no sweep), a synthetic Heston market, and baselines are not exhaustive (no Whalley-Wilmott or full dynamic-programming solution). Training took about 2 hours per option on 4 shared CPU cores. This is a reproduction check, not new research.
 
 ### 6. `quantlab`: bias-aware backtesting toolkit
 Look-ahead-safe engine, walk-forward validation, Probabilistic/Deflated Sharpe.
