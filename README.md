@@ -16,6 +16,7 @@ model I built; taking liquidity loses roughly the spread plus the fee almost eve
 | Is the "NO on 15-30c words" lead real (pre-registered)? | **Not supported** (-3.1c, p = 0.65 on a new sample). |
 | Does a passive maker earn the retail flow's losses? | **Open.** Trade tape: retail-sized YES buyers lose several cents; the live queue-aware paper-trading test has 6 of the 30 settled events its frozen criterion needs. |
 | Does an RL market maker beat Avellaneda-Stoikov? | **On mean P&L, yes (4/4 seeds); risk-adjusted, no (Sharpe 6.2 vs 8.7), and brittle out-of-distribution.** |
+| Are Kalshi's own bracket-ladder intervals calibrated? (conformal prediction) | **No, they are too wide: nominal 90% sets cover 93%.** Split-conformal and adaptive-conformal recalibration restore 90% with ~6-10% narrower sets. |
 
 **What makes the results trustworthy:** event-clustered bootstrap (strikes in one event are not independent); walk-forward models;
 exact tests where a bootstrap breaks (all-win samples); Benjamini-Hochberg control with replication; pre-registered hypotheses
@@ -247,6 +248,29 @@ each, evaluated on 400 held-out paths per regime (seed 0 uses its final checkpoi
   checkpoint noise dominates the effect. Out-of-distribution Sharpe stays ~1.4 vs 2.5 for A-S. One seed per setting: a pointer, not a proof.
 - Limits: stylised flow, one reward shape and no hyperparameter tuning (a stronger inventory penalty would trade mean for risk), so this shows
   the *failure modes* of the method here, not that RL cannot work.
+
+### 5b. Conformal prediction on market-implied distributions (`digitaledge/conformal.py`, `scripts/conformal_study.py`)
+
+Not a trading strategy. A bracket ladder (e.g. "high temp 77-78 F", "79-80 F", plus tails) is a predictive distribution over a numeric
+settlement value. I build its CDF from mid prices (overround removed by normalising), take the probability integral transform (PIT) of
+the realised outcome (randomised within the resolved bin), and ask a distribution-free question: **do the market's own central
+intervals contain the outcome at their stated rate?** Then I wrap the same distributions in split conformal prediction and in Adaptive
+Conformal Inference (Gibbs & Candes, 2021), which is built for distribution shift and is evaluated online in time order.
+
+Data: 796 / 747 / 664 fully priced ladders at 24h / 6h / 1h before close (daily temperature brackets and a few nested
+"above X" ladders across the screen's series), priced at the last quote at least H hours before close. Coverage is averaged over 50
+PIT randomisations; CIs bootstrap over events. Split conformal calibrates on the first 40% of events (time-ordered) and is tested on the rest.
+
+| Horizon | Market nominal | Actual coverage of the market's 90% set | Split conformal | ACI (online) | Width vs market set |
+|---|---|---|---|---|---|
+| 24h | 90% | 92.6% [90.8, 94.2] | 89.7% [87.7, 91.5] | 89.8% [88.3, 91.2] | about x0.90 |
+| 6h  | 90% | 92.7% [91.9, 93.4] | 89.6% [88.5, 90.5] | 90.0% [89.3, 90.7] | about x0.94 |
+| 1h  | 90% | 93.3% [92.5, 93.9] | 90.3% [89.5, 91.0] | 90.1% [89.5, 90.7] | about x0.94 |
+
+- **The market is slightly overdispersed** (its intervals are conservative): tail mass beyond the 5th/95th PIT percentiles is 6.5-6.9% against 10% if calibrated, at every horizon. Consistent with a favourite-longshot pattern in which cheap tail brackets are priced too high. That mechanism is a hypothesis; I have not tested it (e.g. by repricing tails from bids instead of mids).
+- **Conformal recalibration fixes coverage and tightens the sets by about 6-10%**, so the information in the ladder is slightly underused rather than wrong. ACI matches the target online without a held-out calibration block.
+- **Conditional coverage is uneven across series:** at 90% the per-series split-conformal coverage ranges from about 0.73-0.87 up to 0.94-1.00 (median ~0.9, series with at least 8 test events), so the marginal guarantee does not carry over to each city.
+- Limits: mostly daily-temperature ladders from one summer-to-autumn window, and a 40/60 split of a short sample, so this says nothing about other seasons or other market types. The effect is real but small; it is a calibration finding, not an edge.
 
 ### 6. `quantlab`: bias-aware backtesting toolkit
 Look-ahead-safe engine, walk-forward validation, Probabilistic/Deflated Sharpe.
