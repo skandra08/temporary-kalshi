@@ -12,6 +12,7 @@ from attention.deepar import covariates, train_deepar
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--steps", type=int, default=1500)
+ap.add_argument("--retrain", action="store_true", help="retrain at every origin on data before it")
 ap.add_argument("--seed", type=int, default=0)
 ap.add_argument("--max_series", type=int, default=700)
 a = ap.parse_args()
@@ -37,6 +38,9 @@ methods = ["DeepAR", "empirical weekday (8 wk)", "log-normal weekday", "empirica
 preds = {m: [] for m in methods}; truth = []; ctxs = []
 for k in range(NORIG):
     o = t_train + k * H
+    if a.retrain and k > 0:
+        model = train_deepar(Y, idx, o, ctx=CTX, pred=H, steps=a.steps, seed=a.seed, log=lambda m: None); model.eval()
+        print(f"retrained at origin {k}", flush=True)
     ctx = Y[:, o - CTX:o]; truth.append(Y[:, o:o + H]); ctxs.append(ctx)
     cv = covs[o - CTX:o + H][None].repeat(n, 1, 1)
     smp = model.sample(torch.from_numpy(ctx.astype(np.float32)), cv, torch.arange(n), H, n_samples=200, seed=k).numpy()
@@ -66,7 +70,7 @@ def boot(x, nb=3000):
     return [float(x.mean()), float(np.quantile(m, .025)), float(np.quantile(m, .975))]
 
 
-out = {"n_series": n, "T": T, "origins": NORIG, "steps": a.steps, "methods": {}}
+out = {"retrain": a.retrain, "n_series": n, "T": T, "origins": NORIG, "steps": a.steps, "methods": {}}
 loss = {m: wql(P[m]) for m in methods}
 best = min((m for m in methods if m != "DeepAR"), key=lambda m: loss[m].mean())
 spiky = np.std(Y[:, t_train - 90:t_train], 1) / (1 + Y[:, t_train - 90:t_train].mean(1))
@@ -88,4 +92,4 @@ for t, lab in enumerate(["calm", "medium", "spiky"]):
     s = terc == t
     out["by_spikiness_tercile"][lab] = {m: {"wQL": float(loss[m][s].mean()), "cov90": float(cover(P[m], .05, .95)[s].mean())} for m in ("DeepAR", best)}
     print(lab, out["by_spikiness_tercile"][lab])
-Path("results").mkdir(exist_ok=True); Path(f"results/wiki_forecast_results_steps{a.steps}.json").write_text(json.dumps(out, indent=1))
+Path("results").mkdir(exist_ok=True); Path(f"results/wiki_forecast_results_steps{a.steps}{"_retrain" if a.retrain else ""}.json").write_text(json.dumps(out, indent=1))
