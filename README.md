@@ -14,7 +14,7 @@ model I built; taking liquidity loses roughly the spread plus the fee almost eve
 | Do simple rules work across 103 recurring series? | **No.** 0 of 736 tests survive false-discovery control plus replication; taker rules lose ~spread + fee (NO on everything: -5.6c). The rain pattern does not generalise. |
 | Can ML beat the crowd on mention markets? | **Lift, not edge.** SEC-filing text improves on a per-word base rate (-0.0176 log loss) but Kalshi's price is far sharper (0.477 vs 0.638); sports team/PCA structure adds nothing. |
 | Is the "NO on 15-30c words" lead real (pre-registered)? | **Not supported** (-3.1c, p = 0.65 on a new sample). |
-| Does a passive maker earn the retail flow's losses? | **Open.** Trade tape: retail-sized YES buyers lose several cents; the live queue-aware paper-trading test has 6 of the 30 settled events its frozen criterion needs. |
+| Does a passive maker earn the retail flow's losses? | **Open.** Trade tape: retail-sized YES buyers lose several cents; the live queue-aware paper-trading test ended with 13 of the 30 settled events its frozen criterion needs: **not decisive** (+9.9c per fill, CI [-5.8, +16.2]). |
 | Does an RL market maker beat Avellaneda-Stoikov? | **On mean P&L, yes (4/4 seeds); risk-adjusted, no (Sharpe 6.2 vs 8.7), and brittle out-of-distribution.** |
 | Are Kalshi's own bracket-ladder intervals calibrated? (conformal prediction) | **No, they are too wide: nominal 90% sets cover 93%.** Split-conformal and adaptive-conformal recalibration restore 90% with ~6-10% narrower sets. |
 | Does knowing *who* bet (Dawid-Skene trader reliability) add information beyond the price? (Manifold, 8.4k markets) | **Barely: log loss -0.0026 at 20 bets [CI -0.0040, -0.0013], not significant at 50 bets; the shuffled-identity null gives ~0.** |
@@ -215,13 +215,21 @@ Accepting only the fills the model rated positive-EV moved maker P&L from +2.44c
 (overlapping, and no better than a price rule). The descriptive result stands: the passive side of small-trade (<20 contracts) flow earned
 +5.1c per contract [+1.3, +9.1]. Exploratory, ex-post on a tape already examined, and silent on queue priority, which is what the live test measures.
 
-#### In progress: paper-trading a passive NO bidder with a queue model (`PREREGISTRATION.md`, addendum H2)
+#### Paper-trading a passive NO bidder with a queue model (`PREREGISTRATION.md`, addendum H2): not decisive
 The tape shows retail YES buyers lose; the open question is whether a *new* maker would actually get those fills. Kalshi's order
 book is public, so `scripts/book_collector.py` snapshots the book and records trades for the ~30 most active live mention markets
 every 45 seconds, and `scripts/paper_maker.py` replays a frozen rule: rest 1 NO behind the displayed queue, fill only when
 enough taker-YES volume trades through the queue ahead, mark to the settled outcome (P&L = ask - outcome, no maker fee). The rule,
 statistic and decision criterion were committed before any data was collected (commit `4079cbc`): supported only with >= 30 settled events
-and a clustered 95% CI above zero. No result yet; the queue logic has unit tests (`tests/test_papermaker.py`).
+and a clustered 95% CI above zero. The queue logic has unit tests (`tests/test_papermaker.py`).
+
+**Final readout (data 7-9 Oct 2026, 162k book snapshots, 115k trades, 386 markets; 21 events tracked, 13 settled):**
+31,367 ghost orders posted, 4,115 filled (13.1%); median queue ahead at posting 115 contracts, median filling trade 22 contracts.
+Mean P&L per filled contract **+9.85c, 95% CI [-5.81, +16.23]** (clustered by event). By taker size: small takers (<20) n = 1,917, +12.44c [-2.93, +19.15];
+large takers (>=20) n = 2,198, +7.60c [-15.89, +15.04].
+**Decision under the frozen criterion: NOT supported.** 13 settled events is well short of 30 and the CI lower bound is below zero; the positive point estimate is
+not distinguishable from zero. Collection covered only about three days because the cloud container was restarted several times and was idle for
+about two weeks, so this test is inconclusive rather than negative. Running `scripts/book_collector.py` locally for several weeks (see `scripts/start_collection.sh`) is the way to get 30 events.
 
 ### 5. `mmsim`: market making under adverse selection, and an RL market maker
 Hawkes-process order flow with price impact (buys and sells cluster; each order moves the mid), Avellaneda-Stoikov (A-S) quoting, and an
