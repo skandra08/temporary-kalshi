@@ -1,0 +1,12 @@
+{
+ "n_contracts": 9,
+ "n_calls": 5,
+ "mean_pnl_cents": -13.373488888888888,
+ "ci_lo_cents": -37.045383333333334,
+ "ci_hi_cents": 20.8158,
+ "realised_yes": 0.3333333333333333,
+ "mean_yes_mid": 0.23166666666666666,
+ "p_exact_one_sided": 0.7381021787599098,
+ "decision_ready": false,
+ "supported": false
+}
